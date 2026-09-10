@@ -124,11 +124,11 @@ void AdjustTimeOfDay(float deltaDegrees) {
             int hours = 0, minutes = 0;
             FormatTimeDisplay(angleAfter, hours, minutes);
 
-            std::cout << "time: step "
-                      << (deltaDegrees >= 0 ? "+" : "") << std::fixed << std::setprecision(1) << deltaDegrees << " deg -> "
-                      << "time " << std::setfill('0') << std::setw(2) << hours << ":"
-                      << std::setfill('0') << std::setw(2) << minutes
-                      << " (angle " << angleAfter << " deg)\n";
+            LOG << "time: step "
+                << (deltaDegrees >= 0 ? "+" : "") << std::fixed << std::setprecision(1) << deltaDegrees << " deg -> "
+                << "time " << std::setfill('0') << std::setw(2) << hours << ":"
+                << std::setfill('0') << std::setw(2) << minutes
+                << " (angle " << angleAfter << " deg)\n";
         }
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -152,9 +152,9 @@ void RequestTimeStep(float deltaDegrees) {
 
     int hours = 0, minutes = 0;
     FormatTimeDisplay(newTarget, hours, minutes);
-    std::cout << "time: step changed -> " << (deltaDegrees >= 0 ? "+" : "") << std::fixed << std::setprecision(1) << deltaDegrees
-              << " deg (" << std::setfill('0') << std::setw(2) << hours << ":"
-              << std::setfill('0') << std::setw(2) << minutes << ")\n";
+    LOG << "time: step changed -> " << (deltaDegrees >= 0 ? "+" : "") << std::fixed << std::setprecision(1) << deltaDegrees
+        << " deg (" << std::setfill('0') << std::setw(2) << hours << ":"
+        << std::setfill('0') << std::setw(2) << minutes << ")\n";
 }
 
 void RequestTimeHour(int newHour) {
@@ -165,7 +165,7 @@ void RequestTimeHour(int newHour) {
     Config::TargetAngle.store(targetAngle);
     Config::IsSmoothTransitioning.store(true);
 
-    std::cout << "ui: Time of Day changed -> " << newHour << ":00\n";
+    LOG << "ui: Time of Day changed -> " << newHour << ":00\n";
 }
 
 static void DecodeInternalOffsets(uintptr_t funcAddr) {
@@ -216,12 +216,12 @@ static void DecodeInternalOffsets(uintptr_t funcAddr) {
 }
 
 static bool ApplyHooks() {
-    std::cout << "time: scanning for global app wrapper signature\n";
+    LOG << "time: scanning for global app wrapper signature\n";
 
     // sub_7FF6A41D4520: mov rcx, [rip+disp32]; movss xmm1, [rip+disp32]; add rcx, disp32; jmp rel32
     uintptr_t sigWrapper = FindPattern("NMS.exe", Config::SigGlobalAppWrapper);
     if (sigWrapper) {
-        std::cout << "time: signature match @ 0x" << std::hex << sigWrapper << std::dec << "\n";
+        LOG << "time: signature match @ 0x" << std::hex << sigWrapper << std::dec << "\n";
 
         int32_t relApp = *reinterpret_cast<int32_t*>(sigWrapper + 3);
         Config::pGlobalAppPtr = reinterpret_cast<uintptr_t*>(sigWrapper + 7 + relApp);
@@ -232,9 +232,9 @@ static bool ApplyHooks() {
         fnSetTimeOfDay = reinterpret_cast<tSetTimeOfDayDelta>(targetSetTime);
         Config::AddrSetTimeOfDay = targetSetTime;
 
-        std::cout << "time: global app pointer @ 0x" << std::hex << (uintptr_t)Config::pGlobalAppPtr
-                  << " (environment offset 0x" << Config::OffsetEnvFromApp << ")" << std::dec << "\n";
-        std::cout << "time: set time of day @ 0x" << std::hex << targetSetTime << std::dec << "\n";
+        LOG << "time: global app pointer @ 0x" << std::hex << (uintptr_t)Config::pGlobalAppPtr
+            << " (environment offset 0x" << Config::OffsetEnvFromApp << ")" << std::dec << "\n";
+        LOG << "time: set time of day @ 0x" << std::hex << targetSetTime << std::dec << "\n";
 
         DWORD64 imageBase = 0;
         PRUNTIME_FUNCTION pFunc = RtlLookupFunctionEntry(static_cast<DWORD64>(targetSetTime), &imageBase, nullptr);
@@ -242,32 +242,32 @@ static bool ApplyHooks() {
             uintptr_t funcStart = static_cast<uintptr_t>(imageBase + pFunc->BeginAddress);
             uintptr_t funcEnd = static_cast<uintptr_t>(imageBase + pFunc->EndAddress);
             size_t funcSize = funcEnd - funcStart;
-            std::cout << "time: function bounds 0x" << std::hex << funcStart
-                      << "-0x" << funcEnd << " (" << std::dec << funcSize << " bytes)\n";
+            LOG << "time: function bounds 0x" << std::hex << funcStart
+                << "-0x" << funcEnd << " (" << std::dec << funcSize << " bytes)\n";
         }
     }
 
     if (!fnSetTimeOfDay) {
-        std::cout << "time: scanning for flexible set time signature\n";
+        LOG << "time: scanning for flexible set time signature\n";
         Config::AddrSetTimeOfDay = FindPattern("NMS.exe", Config::SigSetTimeOfDayFlexible);
         if (Config::AddrSetTimeOfDay) {
             fnSetTimeOfDay = reinterpret_cast<tSetTimeOfDayDelta>(Config::AddrSetTimeOfDay);
-            std::cout << "time: signature match @ 0x" << std::hex << Config::AddrSetTimeOfDay << std::dec << "\n";
+            LOG << "time: signature match @ 0x" << std::hex << Config::AddrSetTimeOfDay << std::dec << "\n";
         }
     }
 
     if (!fnSetTimeOfDay || !Config::pGlobalAppPtr) {
-        std::cout << "time: signature not found\n";
+        LOG << "time: signature not found\n";
         return false;
     }
 
     DecodeInternalOffsets(Config::AddrSetTimeOfDay);
-    std::cout << "time: offsets -> mode 0x" << std::hex << Config::OffsetTimeMode
-              << ", angle 0x" << Config::OffsetTimeAngle
-              << ", sun quat 0x" << Config::OffsetSunQuat
-              << ", planet axis 0x" << Config::OffsetPlanetAxis << std::dec << "\n";
+    LOG << "time: offsets -> mode 0x" << std::hex << Config::OffsetTimeMode
+        << ", angle 0x" << Config::OffsetTimeAngle
+        << ", sun quat 0x" << Config::OffsetSunQuat
+        << ", planet axis 0x" << Config::OffsetPlanetAxis << std::dec << "\n";
 
-    std::cout << "time: hook live @ 0x" << std::hex << Config::AddrSetTimeOfDay << std::dec << "\n";
+    LOG << "time: hook live @ 0x" << std::hex << Config::AddrSetTimeOfDay << std::dec << "\n";
 
     return true;
 }
@@ -298,7 +298,7 @@ static void KeyPollLoop() {
             lastConfigCheckTime = nowMs;
             if (HasConfigChanged()) {
                 LoadConfig();
-                std::cout << "init: configuration reloaded from disk\n";
+                LOG << "init: configuration reloaded from disk\n";
             }
         }
 
@@ -410,26 +410,26 @@ static unsigned int __stdcall ModThread(void*) {
     Logger::Initialize();
 
     if (IsMicrosoftStoreVersion()) {
-        std::cout << "init: microsoft store version detected, not supported for now\n";
+        LOG << "init: microsoft store version detected, not supported for now\n";
         return 0;
     }
 
-    std::cout << "init: loading configuration\n";
+    LOG << "init: loading configuration\n";
     LoadConfig();
 
-    std::cout << "hooks: patching timeofday bytecode\n";
+    LOG << "hooks: patching timeofday bytecode\n";
     if (!ApplyHooks()) {
-        std::cout << "time: hooks failed to apply\n";
+        LOG << "time: hooks failed to apply\n";
         return 1;
     }
 
-    std::cout << "ui: hooking options menu\n";
+    LOG << "ui: hooking options menu\n";
     if (!TimeOfDayUI::Initialize()) {
-        std::cout << "ui: failed to hook options menu\n";
+        LOG << "ui: failed to hook options menu\n";
     }
 
     Config::bInitialized.store(true);
-    std::cout << "main: entering key poll loop\n\n";
+    LOG << "main: entering key poll loop\n\n";
     KeyPollLoop();
 
     return 0;

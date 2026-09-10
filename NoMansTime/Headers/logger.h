@@ -11,7 +11,7 @@ namespace Logger {
 
     class LogStreamBuf : public std::streambuf {
     public:
-        LogStreamBuf() : m_origCoutBuf(nullptr), m_origCerrBuf(nullptr), m_consoleHandle(INVALID_HANDLE_VALUE), m_initialized(false) {}
+        LogStreamBuf() : m_consoleHandle(INVALID_HANDLE_VALUE), m_initialized(false) {}
 
         ~LogStreamBuf() {
             Shutdown();
@@ -23,18 +23,10 @@ namespace Logger {
 
             m_file.open(logFilePath, std::ios::out | std::ios::trunc);
 
-            m_origCoutBuf = std::cout.rdbuf();
-            m_origCerrBuf = std::cerr.rdbuf();
-
             m_consoleHandle = CreateFileA("CONOUT$", GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
             if (m_consoleHandle == INVALID_HANDLE_VALUE) {
                 m_consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
             }
-
-            std::cout.rdbuf(this);
-            std::cerr.rdbuf(this);
-            std::cout.clear();
-            std::cerr.clear();
 
             m_initialized = true;
             return true;
@@ -47,15 +39,6 @@ namespace Logger {
             if (!m_lineBuffer.empty()) {
                 OutputLine(m_lineBuffer);
                 m_lineBuffer.clear();
-            }
-
-            if (m_origCoutBuf) {
-                std::cout.rdbuf(m_origCoutBuf);
-                m_origCoutBuf = nullptr;
-            }
-            if (m_origCerrBuf) {
-                std::cerr.rdbuf(m_origCerrBuf);
-                m_origCerrBuf = nullptr;
             }
 
             if (m_consoleHandle != INVALID_HANDLE_VALUE && m_consoleHandle != GetStdHandle(STD_OUTPUT_HANDLE)) {
@@ -96,15 +79,10 @@ namespace Logger {
             if (m_file.is_open()) {
                 m_file.flush();
             }
-            if (m_origCoutBuf) {
-                m_origCoutBuf->pubsync();
-            }
             return 0;
         }
 
     private:
-        std::streambuf* m_origCoutBuf;
-        std::streambuf* m_origCerrBuf;
         HANDLE m_consoleHandle;
         std::ofstream m_file;
         std::string m_lineBuffer;
@@ -121,10 +99,6 @@ namespace Logger {
             if (m_consoleHandle != INVALID_HANDLE_VALUE) {
                 DWORD written = 0;
                 WriteConsoleA(m_consoleHandle, str.data(), static_cast<DWORD>(str.size()), &written, nullptr);
-            }
-            else if (m_origCoutBuf) {
-                m_origCoutBuf->sputn(str.data(), str.size());
-                m_origCoutBuf->pubsync();
             }
         }
 
@@ -205,6 +179,16 @@ namespace Logger {
         return path + "NoMansTimeLog.log";
     }
 
+    class LoggerStream : public std::ostream {
+    public:
+        LoggerStream() : std::ostream(&GetLogStreamBuf()) {}
+    };
+
+    inline LoggerStream& Stream() {
+        static LoggerStream s_stream;
+        return s_stream;
+    }
+
     inline bool Initialize() {
         return GetLogStreamBuf().Initialize(GetLogFilePath());
     }
@@ -213,3 +197,6 @@ namespace Logger {
         GetLogStreamBuf().Shutdown();
     }
 }
+
+#define LOG Logger::Stream()
+

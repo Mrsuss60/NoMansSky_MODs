@@ -5,7 +5,7 @@
 
 namespace Config {
     inline std::atomic<bool> bInitialized{ false };
-    inline bool EnableConsole = false;
+    inline bool EnableConsole = 0;
 
     inline uintptr_t AddrSetTimeOfDay = 0;
     inline uintptr_t* pGlobalAppPtr = nullptr;

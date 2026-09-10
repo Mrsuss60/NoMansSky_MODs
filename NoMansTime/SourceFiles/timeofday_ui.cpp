@@ -2,6 +2,7 @@
 #include "globals.h"
 #include "g_memory.h"
 #include "config_file.h"
+#include "logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -25,9 +26,7 @@ namespace TimeOfDayUI {
 
     static const float kSpeedPresets[] = {
         0.00f, 0.25f, 0.50f, 0.75f, 1.00f,
-        2.00f, 3.00f, 4.00f, 5.00f, 6.00f, 7.00f, 8.00f, 9.00f, 10.00f,
-        11.00f, 12.00f, 13.00f, 14.00f, 15.00f, 16.00f, 17.00f, 18.00f, 19.00f, 20.00f,
-        21.00f, 22.00f, 23.00f, 24.00f, 25.00f, 26.00f, 27.00f, 28.00f, 29.00f, 30.00f
+        2.00f, 5.00f, 10.00f, 20.00f, 30.00f, 40.00f, 50.00f
     };
     constexpr int kSpeedPresetCount = sizeof(kSpeedPresets) / sizeof(kSpeedPresets[0]);
 
@@ -48,7 +47,7 @@ namespace TimeOfDayUI {
 
         static bool s_LoggedRender = false;
         if (!s_LoggedRender) {
-            std::cout << "ui: options page rendered\n";
+            LOG << "ui: options page rendered\n";
             s_LoggedRender = true;
         }
 
@@ -136,7 +135,7 @@ namespace TimeOfDayUI {
             }
 
             if (curIndex == 0) {
-                strcpy_s(s_CustomSpeedText, "0.0x (Frozen)");
+                strcpy_s(s_CustomSpeedText, "0.0x (frozen)");
             } else if (curIndex == 1) {
                 strcpy_s(s_CustomSpeedText, "0.25x");
             } else if (curIndex == 2) {
@@ -144,7 +143,7 @@ namespace TimeOfDayUI {
             } else if (curIndex == 3) {
                 strcpy_s(s_CustomSpeedText, "0.75x");
             } else if (curIndex == 4) {
-                strcpy_s(s_CustomSpeedText, "1.0x (Default)");
+                strcpy_s(s_CustomSpeedText, "1.0x (default)");
             } else {
                 sprintf_s(s_CustomSpeedText, "%.1fx", kSpeedPresets[curIndex]);
             }
@@ -159,7 +158,7 @@ namespace TimeOfDayUI {
             int newIndex = fnAddIntSlider(
                 pUIContext,
                 "DAY/NIGHT CYCLE SPEED",
-                "Speed multiplier for the day/night progression (0.0x to 30.0x)",
+                "Speed multiplier for the day/night progression (0.0x to 50.0x)",
                 curIndex,
                 4,
                 0,
@@ -208,7 +207,7 @@ namespace TimeOfDayUI {
             }
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {
-            std::cout << "ui: exception caught during options render\n";
+            LOG << "ui: exception caught during options render\n";
         }
     }
 
@@ -223,45 +222,45 @@ namespace TimeOfDayUI {
     bool Initialize() {
         const char* modName = "NMS.exe";
 
-        std::cout << "ui: resolving dynamic string cross-references\n";
+        LOG << "ui: resolving dynamic string cross-references\n";
 
         uintptr_t strMisc = FindString(modName, "UI_OPTIONS_MISC");
         if (!strMisc) {
-            std::cout << "ui: failed to locate UI_OPTIONS_MISC\n";
+            LOG << "ui: failed to locate UI_OPTIONS_MISC\n";
             return false;
         }
 
         uintptr_t xrefMisc = FindRipRef(modName, strMisc);
         if (!xrefMisc) {
-            std::cout << "ui: failed to locate xref for UI_OPTIONS_MISC\n";
+            LOG << "ui: failed to locate xref for UI_OPTIONS_MISC\n";
             return false;
         }
 
         DWORD64 imageBase = 0;
         PRUNTIME_FUNCTION pFunc = RtlLookupFunctionEntry(static_cast<DWORD64>(xrefMisc), &imageBase, nullptr);
         if (!pFunc) {
-            std::cout << "ui: RtlLookupFunctionEntry failed for options function\n";
+            LOG << "ui: RtlLookupFunctionEntry failed for options function\n";
             return false;
         }
 
         uintptr_t funcStart = static_cast<uintptr_t>(imageBase + pFunc->BeginAddress);
         uintptr_t funcEnd = static_cast<uintptr_t>(imageBase + pFunc->EndAddress);
         size_t funcSize = static_cast<size_t>(funcEnd - funcStart);
-        std::cout << "ui: options function bounds 0x" << std::hex << funcStart << "-0x" << funcEnd << " (" << std::dec << funcSize << " bytes)\n";
+        LOG << "ui: options function bounds 0x" << std::hex << funcStart << "-0x" << funcEnd << " (" << std::dec << funcSize << " bytes)\n";
 
         uintptr_t callHeader = FindNthCallForward(xrefMisc, 0x100, 1);
         if (!callHeader || callHeader >= funcEnd) return false;
         fnAddSectionHeader = reinterpret_cast<tAddSectionHeader>(ResolveCallTarget(callHeader));
-        std::cout << "ui: AddSectionHeader @ 0x" << std::hex << (uintptr_t)fnAddSectionHeader << std::dec << "\n";
+        LOG << "ui: AddSectionHeader @ 0x" << std::hex << (uintptr_t)fnAddSectionHeader << std::dec << "\n";
 
-        uintptr_t strAutoTorch = FindString(modName, "UI_AUTOTORCH");
-        if (strAutoTorch) {
-            uintptr_t xrefAutoTorch = FindRipRefInRange(strAutoTorch, funcStart, funcEnd);
-            if (xrefAutoTorch) {
-                uintptr_t callToggle = FindNthCallForward(xrefAutoTorch, 0x100, 1);
-                if (callToggle && callToggle < funcEnd) {
+        uintptr_t strHeadBob = FindString(modName, "UI_HEAD_BOB");
+        if (strHeadBob) {
+            uintptr_t xrefHeadBob = FindRipRef(modName, strHeadBob);
+            if (xrefHeadBob) {
+                uintptr_t callToggle = FindNthCallForward(xrefHeadBob, 0x100, 1);
+                if (callToggle) {
                     fnAddToggleOption = reinterpret_cast<tAddToggleOption>(ResolveCallTarget(callToggle));
-                    std::cout << "ui: AddToggleOption @ 0x" << std::hex << (uintptr_t)fnAddToggleOption << std::dec << "\n";
+                    LOG << "ui: AddToggleOption @ 0x" << std::hex << (uintptr_t)fnAddToggleOption << std::dec << "\n";
                 }
             }
         }
@@ -273,46 +272,62 @@ namespace TimeOfDayUI {
                 uintptr_t callSlider = FindNthCallForward(xrefShake, 0x100, 1);
                 if (callSlider) {
                     fnAddIntSlider = reinterpret_cast<tAddIntSlider>(ResolveCallTarget(callSlider));
-                    std::cout << "ui: AddIntSlider @ 0x" << std::hex << (uintptr_t)fnAddIntSlider << std::dec << "\n";
+                    LOG << "ui: AddIntSlider @ 0x" << std::hex << (uintptr_t)fnAddIntSlider << std::dec << "\n";
                 }
             }
         }
 
         if (fnAddIntSlider) {
             const uint8_t* pCode = reinterpret_cast<const uint8_t*>(fnAddIntSlider);
-            for (size_t i = 0; i < 0x200; ++i) {
-                if (pCode[i] == 0x48 && pCode[i + 1] == 0x8D && pCode[i + 2] == 0x15 &&
-                    pCode[i + 7] == 0x4D && pCode[i + 8] == 0x8B && pCode[i + 9] == 0x4F && pCode[i + 10] == 0x08) {
-                    for (size_t j = i + 11; j < i + 35; ++j) {
-                        if (pCode[j] == 0xE8) {
-                            s_CallSiteSprintf = reinterpret_cast<uintptr_t>(&pCode[j]);
-                            s_pSprintfTrampoline = AllocateNearAddress(s_CallSiteSprintf, 0x40);
-                            if (s_pSprintfTrampoline) {
-                                int64_t dist = reinterpret_cast<uintptr_t>(s_pSprintfTrampoline) - (s_CallSiteSprintf + 5);
-                                if (dist >= INT32_MIN && dist <= INT32_MAX) {
-                                    uint8_t stub[14] = { 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 };
-                                    uintptr_t detour = reinterpret_cast<uintptr_t>(&Detour_SliderSprintf);
-                                    memcpy(&stub[6], &detour, sizeof(uintptr_t));
-
-                                    DWORD oldProtect;
-                                    VirtualProtect(s_pSprintfTrampoline, sizeof(stub), PAGE_READWRITE, &oldProtect);
-                                    memcpy(s_pSprintfTrampoline, stub, sizeof(stub));
-                                    VirtualProtect(s_pSprintfTrampoline, sizeof(stub), PAGE_EXECUTE_READ, &oldProtect);
-                                    FlushInstructionCache(GetCurrentProcess(), s_pSprintfTrampoline, sizeof(stub));
-
-                                    VirtualProtect(reinterpret_cast<void*>(s_CallSiteSprintf), 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-                                    *reinterpret_cast<int32_t*>(s_CallSiteSprintf + 1) = static_cast<int32_t>(dist);
-                                    VirtualProtect(reinterpret_cast<void*>(s_CallSiteSprintf), 5, oldProtect, &oldProtect);
-                                    FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void*>(s_CallSiteSprintf), 5);
-
-                                    std::cout << "ui: slider format hook live @ 0x" << std::hex << s_CallSiteSprintf
-                                              << " -> trampoline 0x" << (uintptr_t)s_pSprintfTrampoline << std::dec << "\n";
-                                }
-                            }
-                            break;
+            for (size_t i = 0; i < 0x250; ++i) {
+                if (pCode[i] == 0x48 && pCode[i + 1] == 0x8D && pCode[i + 2] == 0x15) {
+                    int32_t disp = *reinterpret_cast<const int32_t*>(&pCode[i + 3]);
+                    const char* strTarget = reinterpret_cast<const char*>(&pCode[i + 7] + disp);
+                    bool isFormatString = false;
+                    __try {
+                        if (strncmp(strTarget, "%d%s", 4) == 0) {
+                            isFormatString = true;
                         }
                     }
-                    break;
+                    __except (EXCEPTION_EXECUTE_HANDLER) {
+                        isFormatString = false;
+                    }
+
+                    if (isFormatString) {
+                        for (size_t j = i + 7; j < i + 40; ++j) {
+                            if (pCode[j] == 0xE8) {
+                                s_CallSiteSprintf = reinterpret_cast<uintptr_t>(&pCode[j]);
+                                break;
+                            }
+                        }
+                        if (s_CallSiteSprintf) break;
+                    }
+                }
+            }
+
+            if (s_CallSiteSprintf) {
+                s_pSprintfTrampoline = AllocateNearAddress(s_CallSiteSprintf, 0x40);
+                if (s_pSprintfTrampoline) {
+                    int64_t dist = reinterpret_cast<uintptr_t>(s_pSprintfTrampoline) - (s_CallSiteSprintf + 5);
+                    if (dist >= INT32_MIN && dist <= INT32_MAX) {
+                        uint8_t stub[14] = { 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 };
+                        uintptr_t detour = reinterpret_cast<uintptr_t>(&Detour_SliderSprintf);
+                        memcpy(&stub[6], &detour, sizeof(uintptr_t));
+
+                        DWORD oldProtect;
+                        VirtualProtect(s_pSprintfTrampoline, sizeof(stub), PAGE_READWRITE, &oldProtect);
+                        memcpy(s_pSprintfTrampoline, stub, sizeof(stub));
+                        VirtualProtect(s_pSprintfTrampoline, sizeof(stub), PAGE_EXECUTE_READ, &oldProtect);
+                        FlushInstructionCache(GetCurrentProcess(), s_pSprintfTrampoline, sizeof(stub));
+
+                        VirtualProtect(reinterpret_cast<void*>(s_CallSiteSprintf), 5, PAGE_EXECUTE_READWRITE, &oldProtect);
+                        *reinterpret_cast<int32_t*>(s_CallSiteSprintf + 1) = static_cast<int32_t>(dist);
+                        VirtualProtect(reinterpret_cast<void*>(s_CallSiteSprintf), 5, oldProtect, &oldProtect);
+                        FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void*>(s_CallSiteSprintf), 5);
+
+                        LOG << "ui: slider format hook live @ 0x" << std::hex << s_CallSiteSprintf
+                            << " -> trampoline 0x" << (uintptr_t)s_pSprintfTrampoline << std::dec << "\n";
+                    }
                 }
             }
         }
@@ -361,12 +376,12 @@ namespace TimeOfDayUI {
         }
 
         if (!s_CallSiteEndOptions || s_CallSiteEndOptions >= funcEnd || *reinterpret_cast<uint8_t*>(s_CallSiteEndOptions) != 0xE8) {
-            std::cout << "ui: failed to locate EndOptionsPage call site\n";
+            LOG << "ui: failed to locate EndOptionsPage call site\n";
             return false;
         }
 
         if (!fnAddSectionHeader || !fnAddToggleOption || !fnAddIntSlider || !fnEndOptionsPage) {
-            std::cout << "ui: UI function pointers failed to resolve\n";
+            LOG << "ui: UI function pointers failed to resolve\n";
             return false;
         }
 
@@ -391,9 +406,9 @@ namespace TimeOfDayUI {
         VirtualProtect(reinterpret_cast<void*>(s_CallSiteEndOptions), 5, oldProtect, &oldProtect);
         FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void*>(s_CallSiteEndOptions), 5);
 
-        std::cout << "ui: options hook live @ 0x" << std::hex << s_CallSiteEndOptions
-                  << " -> relay 0x" << (uintptr_t)s_pRelayTrampoline
-                  << " -> fnEndOptionsPage @ 0x" << (uintptr_t)fnEndOptionsPage << std::dec << "\n";
+        LOG << "ui: options hook live @ 0x" << std::hex << s_CallSiteEndOptions
+            << " -> relay 0x" << (uintptr_t)s_pRelayTrampoline
+            << " -> fnEndOptionsPage @ 0x" << (uintptr_t)fnEndOptionsPage << std::dec << "\n";
 
         return true;
     }

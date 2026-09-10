@@ -30,7 +30,7 @@ void SaveConfig() {
     if (!f.is_open()) return;
 
     f << "[Settings]\n";
-    f << "; Day/Night cycle speed multiplier (0.0 to 30.0)\n";
+    f << "; Day/Night cycle speed multiplier (0.0 to 50.0)\n";
     f << "DayNightCycleSpeed=" << Config::TimeSpeedMultiplier.load() << "\n";
     f << "; Step size in minutes per hotkey press (1 to 60)\n";
     f << "StepMinutes=" << Config::StepMinutes.load() << "\n";
@@ -145,7 +145,7 @@ void LoadConfig() {
         try {
             if (key == "DayNightCycleSpeed") {
                 float speed = std::stof(val);
-                speed = (std::max)(0.0f, (std::min)(30.0f, speed));
+                speed = (std::max)(0.0f, (std::min)(50.0f, speed));
                 Config::TimeSpeedMultiplier.store(speed);
                 if (speed <= 0.0001f) {
                     Config::FreezeTime.store(true);
