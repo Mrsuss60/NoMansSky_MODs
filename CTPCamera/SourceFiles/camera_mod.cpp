@@ -145,6 +145,7 @@ static bool HandleCameraHook(uintptr_t camera) {
         for (int i = 0; i < Config::CopiesSmoothing; ++i) {
             const uint32_t s = i * Config::StructStride;
             *(uint32_t*)(camera + Config::OffsetCameraSmoothing + s) = 0;
+            *(uint32_t*)(camera + 0x210 + s) = 0;
             *(uint32_t*)(camera + Config::OffsetSprintCameraS + s) = 0;
         }
     }
@@ -231,6 +232,7 @@ static void ForceUpdateCamera() {
             for (int i = 0; i < Config::CopiesSmoothing; ++i) {
                 uint32_t s = i * Config::StructStride;
                 *(uint32_t*)(Config::GlobalCameraPtr + Config::OffsetCameraSmoothing + s) = 0;
+                *(uint32_t*)(Config::GlobalCameraPtr + 0x210 + s) = 0;
                 *(uint32_t*)(Config::GlobalCameraPtr + Config::OffsetSprintCameraS + s) = 0;
             }
         }
@@ -481,6 +483,7 @@ void ApplyHooks() {
         std::cout << "camera: collision read2 @ 0x" << std::hex << Config::AddrCollision2 << std::dec << "\n";
     }
     if (Config::AddrCameraSmoothing2) {
+        memcpy(Config::OrigCameraSmoothing2, reinterpret_cast<void*>(Config::AddrCameraSmoothing2), 8);
         std::cout << "camera: smoothing2 signature @ 0x" << std::hex << Config::AddrCameraSmoothing2 << std::dec << "\n";
     }
 

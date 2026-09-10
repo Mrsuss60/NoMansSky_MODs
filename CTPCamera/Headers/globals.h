@@ -31,7 +31,7 @@ namespace Config {
     inline uint32_t OffsetDist = 0x498;
     inline uint32_t OffsetX = 0x4F4;
     inline uint32_t OffsetHeight = 0x4F8;
-    inline uint32_t OffsetCameraSmoothing = 0x210;
+    inline uint32_t OffsetCameraSmoothing = 0x21C;
     inline uint32_t OffsetSprintCameraS = 0x494;
     inline uint32_t OffsetCollision = 0x4A0;
 
@@ -39,7 +39,7 @@ namespace Config {
     inline const char* SigCameraShort = "F3 0F 11 8B 98 04 00 00";
     inline const char* SigCollisionRead1 = "F3 0F 59 83 A0 04 00 00";
     inline const char* SigCollisionRead2 = "F3 0F 59 93 A0 04 00 00";
-    inline const char* SigCameraSmoothing2 = "F3 0F 11 9E 10 02 00 00";
+    inline const char* SigCameraSmoothing2 = "F3 0F 11 9E 1C 02 00 00";
 
     inline uint32_t OffsetCharacterRigTag = 0x478;
     inline int CorvetteExitTransitionSteps = 35;
@@ -63,6 +63,6 @@ namespace Config {
     inline unsigned char PatchXorpsXmm2[8] = { 0x0F, 0x57, 0xD2, 0x90, 0x90, 0x90, 0x90, 0x90 };
     inline unsigned char PatchCameraJmp[8] = { 0xE9, 0x00, 0x00, 0x00, 0x00, 0x90, 0x90, 0x90 };
 
-    inline unsigned char OrigCameraSmoothing2[8] = { 0xF3, 0x0F, 0x11, 0x9E, 0x10, 0x02, 0x00, 0x00 };
+    inline unsigned char OrigCameraSmoothing2[8] = { 0xF3, 0x0F, 0x11, 0x9E, 0x1C, 0x02, 0x00, 0x00 };
     inline unsigned char PatchNop8[8] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
 }

@@ -4,19 +4,19 @@
 #include <atomic>
 
 namespace Config {
-    // sub_140650680 (vehicle camera master update)
-    inline const char* const SigVehicleMasterHook = "40 53 48 83 EC 20 48 8B 01 48 8B ?? FF 50 68 48 8B ?? 41 B8 02 00 00 00";
-    inline const char* const SigVehicleMasterHookFallback = "40 53 48 83 EC 20 48 8B 01 48 8B ?? FF 50 68";
+    // sub_140680130 (vehicle camera master update)
+    inline const char* const SigVehicleMasterHook = "40 53 48 83 EC 20 48 8B 01 48 8B ?? FF 50 70 48 8B ?? 41 B8 02 00 00 00";
+    inline const char* const SigVehicleMasterHookFallback = "40 53 48 83 EC 20 48 8B 01 48 8B ?? FF 50 70";
 
     // Mech Weapon Aim / Mining Hook (lea rcx, [rdi+458h]; lea rbx, [rcx+4])
     inline const char* const SigMechAimHook = "48 8D 8F 58 04 00 00 48 8D 59 04";
 
     // Condition Location / Environment Zone (sub_7FF6A4241800)
     inline const char* const SigConditionLocation = "48 8B 0D ?? ?? ?? ?? 8B B9 ?? ?? ?? ?? 48 8D B1";
-    inline const char* const SigConditionLocationFallback = "48 8B 0D ?? ?? ?? ?? 8B B9 04 FE 55 00";
+    inline const char* const SigConditionLocationFallback = "48 8B 0D ?? ?? ?? ?? 8B B9 74 A5 57 00";
 
     inline uintptr_t* AddrGameStateManager = nullptr;
-    inline uint32_t OffsetEnvZone = 0x55FE04;
+    inline uint32_t OffsetEnvZone = 0x57A574;
 
     inline uintptr_t AddrVehicleMasterHook = 0;
     inline unsigned char OrigVehicleMasterHook[6] = { 0 };
