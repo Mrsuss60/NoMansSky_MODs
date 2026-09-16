@@ -7,5 +7,6 @@
   <Project Path="DbghelpModLoader/DbghelpModLoader.vcxproj" Id="a03b94e0-95e2-48c8-9699-c3813723b0e5" />
   <Project Path="NoFOVLimit/NoFOVLimit.vcxproj" Id="3a197c45-084c-48bb-8f8f-eee8434f748f" />
   <Project Path="NoMansTime/NoMansTime.vcxproj" Id="982db619-88e2-4214-95dc-84e0d874057d" />
+  <Project Path="ToggleThatHUDoff/ToggleThatHUD.vcxproj" Id="e7a1843b-285d-4f81-8b4e-862d2ef48c77" />
   <Project Path="VersionModLoader/VersionModLoader.vcxproj" Id="7f94e538-daa0-4899-83ca-341ddbc66b8c" />
 </Solution>
