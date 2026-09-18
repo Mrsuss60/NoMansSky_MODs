@@ -150,15 +150,17 @@ uintptr_t ResolveHUDCallbackByString(const char* moduleName, const char* hudName
     DWORD imgSize = ntH->OptionalHeader.SizeOfImage;
     uint8_t* scan = (uint8_t*)hMod;
 
-    // Search for lea r8, [rip+disp] pointing to pStr
-    for (DWORD i = 0; i < imgSize - 35; ++i) {
+    for (DWORD i = 35; i < imgSize - 35; ++i) {
         if (scan[i] == 0x4C && scan[i + 1] == 0x8D && (scan[i + 2] & 0xC7) == 0x05) {
             int32_t disp = *reinterpret_cast<int32_t*>(&scan[i + 3]);
             uintptr_t ripAfter = (uintptr_t)&scan[i + 7];
             if ((ripAfter + disp) == pStr) {
-                // Next instruction loads callback into r9 (lea r9, [rip+disp])
-                for (DWORD j = i + 7; j < i + 35; ++j) {
-                    if (scan[j] == 0x4C && scan[j + 1] == 0x8D && (scan[j + 2] & 0xC7) == 0x05) {
+                DWORD startSearch = (i >= 35) ? (i - 35) : 0;
+                DWORD endSearch = (i + 35 < imgSize - 7) ? (i + 35) : (imgSize - 7);
+
+                for (DWORD j = startSearch; j < endSearch; ++j) {
+                    if (j >= i && j < i + 7) continue; 
+                    if (scan[j] == 0x4C && scan[j + 1] == 0x8D && scan[j + 2] == 0x0D) {
                         int32_t dispCb = *reinterpret_cast<int32_t*>(&scan[j + 3]);
                         uintptr_t ripCbAfter = (uintptr_t)&scan[j + 7];
                         uintptr_t targetCb = ripCbAfter + dispCb;

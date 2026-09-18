@@ -154,12 +154,33 @@ static bool ApplyHooks() {
 
     uintptr_t nmsBase = (uintptr_t)GetModuleHandleA(nullptr);
 
-    // Dynamic resolution of PlayerHUD callback via registration string
     uintptr_t addrPlayerHUD = ResolveHUDCallbackByString("NMS.exe", "Game/HUD/PlayerHUD");
-    if (!addrPlayerHUD && nmsBase) {
-        addrPlayerHUD = nmsBase + 0x9A5950;
+
+    if (!addrPlayerHUD) {
+        uintptr_t sigIndicator = FindPattern("NMS.exe", Config::SigPlayerHUDIndicator);
+        if (sigIndicator && sigIndicator >= 0x10) {
+            uint8_t* pCheck = reinterpret_cast<uint8_t*>(sigIndicator - 0x10);
+            if (IsMemoryReadable(pCheck, 3) && *pCheck == 0xE9) {
+                addrPlayerHUD = reinterpret_cast<uintptr_t>(pCheck);
+            }
+        }
     }
 
+    if (!addrPlayerHUD && sigWrapper) {
+        uint8_t* pRel = reinterpret_cast<uint8_t*>(sigWrapper + 0x37A10);
+        if (IsMemoryReadable(pRel, 3) && *pRel == 0xE9) {
+            addrPlayerHUD = reinterpret_cast<uintptr_t>(pRel);
+        }
+    }
+
+    if (!addrPlayerHUD && nmsBase) {
+        addrPlayerHUD = nmsBase + 0x9A57D0;
+        if (!IsMemoryReadable(reinterpret_cast<void*>(addrPlayerHUD), 3) || *reinterpret_cast<uint8_t*>(addrPlayerHUD) != 0xE9) {
+            addrPlayerHUD = nmsBase + 0x9A5950;
+        }
+    }
+
+    // Validate PlayerHUD
     if (addrPlayerHUD && IsMemoryReadable(reinterpret_cast<void*>(addrPlayerHUD), 3)) {
         uint8_t* p = reinterpret_cast<uint8_t*>(addrPlayerHUD);
         if (*p == 0xE9) {
@@ -173,15 +194,27 @@ static bool ApplyHooks() {
         LOG << "hud: PlayerHUD callback not found\n";
     }
 
-    // Dynamic resolution of ShipHUD callback via registration string or signature
     uintptr_t addrShipHUD = ResolveHUDCallbackByString("NMS.exe", "Game/HUD/ShipHUD");
+
     if (!addrShipHUD) {
         addrShipHUD = FindPattern("NMS.exe", Config::SigShipHUD);
     }
-    if (!addrShipHUD && nmsBase) {
-        addrShipHUD = nmsBase + 0x9D3900;
+
+    if (!addrShipHUD && sigWrapper) {
+        uint8_t* pRel = reinterpret_cast<uint8_t*>(sigWrapper + 0x659C0);
+        if (IsMemoryReadable(pRel, 3) && pRel[0] == 0x40 && pRel[1] == 0x53) {
+            addrShipHUD = reinterpret_cast<uintptr_t>(pRel);
+        }
     }
 
+    if (!addrShipHUD && nmsBase) {
+        addrShipHUD = nmsBase + 0x9D3780;
+        if (!IsMemoryReadable(reinterpret_cast<void*>(addrShipHUD), 3) || *reinterpret_cast<uint8_t*>(addrShipHUD) != 0x40) {
+            addrShipHUD = nmsBase + 0x9D3900;
+        }
+    }
+
+    // Validate ShipHUD
     if (addrShipHUD && IsMemoryReadable(reinterpret_cast<void*>(addrShipHUD), 3)) {
         uint8_t* p = reinterpret_cast<uint8_t*>(addrShipHUD);
         if (p[0] == 0x40 && p[1] == 0x53) {

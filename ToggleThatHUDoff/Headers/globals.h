@@ -18,6 +18,9 @@ namespace Config {
     // Direct ShipHUD Callback Signature
     inline const char* SigShipHUD = "40 53 48 83 EC 20 48 8B D9 48 8B 89 ?? ?? ?? ?? 48 85 C9 74 ?? 48 8B 01 FF 50";
 
+    // PlayerHUD Indicator Panel Pattern (function immediately following PlayerHUD callback thunk)
+    inline const char* SigPlayerHUDIndicator = "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 41 55 41 56 41 57 48 83 EC 30 8B 69 6C";
+
     // Memory Offsets from (*pGlobalAppPtr)
     // Working settings struct = 3205328 (0x30E8D0) + 28000 (0x6D60) = 3233328 (0x315630)
     inline uint32_t OffsetWorkingHUD = 0x315630;
