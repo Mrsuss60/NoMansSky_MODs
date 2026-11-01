@@ -72,7 +72,7 @@ static bool HandleCameraHook(uintptr_t camera) {
     }
 
     // Vehicle/ship camera handled by camera_mod_veh.cpp
-    if (memcmp(currentTag, "CHAR", 4) != 0) {
+    if (!Config::IsOnFootTag(currentTag)) {
         return false;
     }
 
@@ -130,34 +130,45 @@ static bool HandleCameraHook(uintptr_t camera) {
         return false;
     }
 
-    const float cWX = ScaleToGame(Config::CustomX.load(std::memory_order_relaxed), -4.65f, 4.65f);
-    const float cHght = ScaleToGame(Config::CustomHeight.load(std::memory_order_relaxed), -1.85f, 3.7f);
-    const float cDis = ScaleToGame(Config::CustomDist.load(std::memory_order_relaxed), 1.4f, 25.0f);
+    __try {
+        const float cWX = ScaleToGame(Config::CustomX.load(std::memory_order_relaxed), -4.65f, 4.65f);
+        const float cHght = ScaleToGame(Config::CustomHeight.load(std::memory_order_relaxed), -1.85f, 3.7f);
+        const float cDis = ScaleToGame(Config::CustomDist.load(std::memory_order_relaxed), 1.4f, 25.0f);
 
-    for (int i = 0; i < Config::CopiesXYZ; ++i) {
-        const uint32_t s = i * Config::StructStride;
-        *(float*)(camera + Config::OffsetX + s) = cWX;
-        *(float*)(camera + Config::OffsetHeight + s) = cHght;
-        *(float*)(camera + Config::OffsetDist + s) = cDis;
-    }
-
-    if (!Config::EnableCameraSmoothing.load(std::memory_order_relaxed)) {
-        for (int i = 0; i < Config::CopiesSmoothing; ++i) {
+        for (int i = 0; i < Config::CopiesXYZ; ++i) {
             const uint32_t s = i * Config::StructStride;
-            *(uint32_t*)(camera + Config::OffsetCameraSmoothing + s) = 0;
-            *(uint32_t*)(camera + 0x210 + s) = 0;
-            *(uint32_t*)(camera + Config::OffsetSprintCameraS + s) = 0;
+            *(float*)(camera + Config::OffsetX + s) = cWX;
+            *(float*)(camera + Config::OffsetHeight + s) = cHght;
+            *(float*)(camera + Config::OffsetDist + s) = cDis;
         }
-    }
 
-    for (int i = 0; i < Config::CopiesCollision; ++i) {
-        *(uint32_t*)(camera + Config::OffsetCollision + (i * Config::StructStride)) = 0;
-    }
+        if (!Config::EnableCameraSmoothing.load(std::memory_order_relaxed)) {
+            *(uint32_t*)(camera + Config::OffsetCameraSmoothing) = 0;
+            *(uint32_t*)(camera + 0x210) = 0;
+            *(uint32_t*)(camera + 0x214) = 0;
+            *(uint32_t*)(camera + 0x218) = 0;
+            *(uint32_t*)(camera + 0x21C) = 0;
+            *(uint32_t*)(camera + 0x220) = 0;
 
-    return true;
+            for (int i = 0; i < Config::CopiesSmoothing; ++i) {
+                const uint32_t s = i * Config::StructStride;
+                *(uint32_t*)(camera + Config::OffsetSprintCameraS + s) = 0;
+            }
+        }
+
+        for (int i = 0; i < Config::CopiesCollision; ++i) {
+            *(uint32_t*)(camera + Config::OffsetCollision + (i * Config::StructStride)) = 0;
+        }
+
+        return true;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        Config::GlobalCameraPtr = 0;
+        return false;
+    }
 }
 
-static void ForceUpdateCamera() {
+void ForceUpdateCamera() {
     if (!Config::GlobalCameraPtr) return;
     if (g_transitionState.load(std::memory_order_acquire) != 0) return;
 
@@ -168,7 +179,7 @@ static void ForceUpdateCamera() {
 
         bool keepMomentum = Config::EnableCameraSmoothing.load();
 
-        if (memcmp(currentTag, "CHAR", 4) != 0) {
+        if (!Config::IsOnFootTag(currentTag)) {
             float targetVehDist = -1.0f;
             float targetVehHeight = -999.0f;
             float targetVehX = -999.0f;
@@ -185,7 +196,7 @@ static void ForceUpdateCamera() {
                 targetVehDist = Config::CustomCorvetteDist.load();
                 targetVehX = Config::CustomCorvetteX.load();
             }
-            else if (memcmp(currentTag, "SPAC", 4) == 0 || memcmp(currentTag, "DROP", 4) == 0 ||
+            else if (memcmp(currentTag, "SPACESHIP", 9) == 0 || memcmp(currentTag, "DROP", 4) == 0 ||
                 memcmp(currentTag, "SCIE", 4) == 0 || memcmp(currentTag, "SHUT", 4) == 0 ||
                 memcmp(currentTag, "FLAT", 4) == 0 || memcmp(currentTag, "SAIL", 4) == 0 ||
                 memcmp(currentTag, "ROYA", 4) == 0 || memcmp(currentTag, "ROBO", 4) == 0 ||
@@ -229,10 +240,15 @@ static void ForceUpdateCamera() {
         }
 
         if (!keepMomentum) {
+            *(uint32_t*)(Config::GlobalCameraPtr + Config::OffsetCameraSmoothing) = 0;
+            *(uint32_t*)(Config::GlobalCameraPtr + 0x210) = 0;
+            *(uint32_t*)(Config::GlobalCameraPtr + 0x214) = 0;
+            *(uint32_t*)(Config::GlobalCameraPtr + 0x218) = 0;
+            *(uint32_t*)(Config::GlobalCameraPtr + 0x21C) = 0;
+            *(uint32_t*)(Config::GlobalCameraPtr + 0x220) = 0;
+
             for (int i = 0; i < Config::CopiesSmoothing; ++i) {
                 uint32_t s = i * Config::StructStride;
-                *(uint32_t*)(Config::GlobalCameraPtr + Config::OffsetCameraSmoothing + s) = 0;
-                *(uint32_t*)(Config::GlobalCameraPtr + 0x210 + s) = 0;
                 *(uint32_t*)(Config::GlobalCameraPtr + Config::OffsetSprintCameraS + s) = 0;
             }
         }
@@ -374,34 +390,28 @@ void RebuildCameraShellcode() {
     memcpy((void*)Config::AddrCodecave, sc.data(), sc.size());
     VirtualProtect((void*)Config::AddrCodecave, sc.size(), PAGE_EXECUTE_READ, &oP);
     FlushInstructionCache(GetCurrentProcess(), (void*)Config::AddrCodecave, sc.size());
-
-    UpdateSmoothingPatch();
 }
 
-static void ToggleMod() {
-    Config::bModActive = !Config::bModActive;
+void SetOnFootHooksEnabled(bool enable) {
     DWORD oP;
 
     if (Config::AddrCameraHook) {
         VirtualProtect((void*)Config::AddrCameraHook, 8, PAGE_EXECUTE_READWRITE, &oP);
-        memcpy((void*)Config::AddrCameraHook, Config::bModActive ? Config::PatchCameraJmp : Config::OrigCamera, 8);
+        memcpy((void*)Config::AddrCameraHook, enable ? Config::PatchCameraJmp : Config::OrigCamera, 8);
         VirtualProtect((void*)Config::AddrCameraHook, 8, oP, &oP);
     }
     if (Config::AddrCollision1) {
         VirtualProtect((void*)Config::AddrCollision1, 8, PAGE_EXECUTE_READWRITE, &oP);
-        memcpy((void*)Config::AddrCollision1, Config::bModActive ? Config::PatchXorpsXmm0 : Config::OrigCollision1, 8);
+        memcpy((void*)Config::AddrCollision1, enable ? Config::PatchXorpsXmm0 : Config::OrigCollision1, 8);
         VirtualProtect((void*)Config::AddrCollision1, 8, oP, &oP);
     }
     if (Config::AddrCollision2) {
         VirtualProtect((void*)Config::AddrCollision2, 8, PAGE_EXECUTE_READWRITE, &oP);
-        memcpy((void*)Config::AddrCollision2, Config::bModActive ? Config::PatchXorpsXmm2 : Config::OrigCollision2, 8);
+        memcpy((void*)Config::AddrCollision2, enable ? Config::PatchXorpsXmm2 : Config::OrigCollision2, 8);
         VirtualProtect((void*)Config::AddrCollision2, 8, oP, &oP);
     }
 
-    if (Config::bModActive) ForceUpdateCamera();
-
     UpdateSmoothingPatch();
-    VehicleCamera::SetEnabled(Config::bModActive);
 }
 
 void ApplyHooks() {
@@ -475,6 +485,9 @@ void ApplyHooks() {
     Config::AddrCollision1 = FindPattern("NMS.exe", Config::SigCollisionRead1);
     Config::AddrCollision2 = FindPattern("NMS.exe", Config::SigCollisionRead2);
     Config::AddrCameraSmoothing2 = FindPattern("NMS.exe", Config::SigCameraSmoothing2);
+    if (!Config::AddrCameraSmoothing2) {
+        Config::AddrCameraSmoothing2 = FindPattern("NMS.exe", "F3 0F 11 9E ?? 02 00 00");
+    }
 
     if (Config::AddrCollision1) {
         std::cout << "camera: collision read1 @ 0x" << std::hex << Config::AddrCollision1 << std::dec << "\n";
@@ -483,8 +496,13 @@ void ApplyHooks() {
         std::cout << "camera: collision read2 @ 0x" << std::hex << Config::AddrCollision2 << std::dec << "\n";
     }
     if (Config::AddrCameraSmoothing2) {
+        uint32_t liveDisp = *reinterpret_cast<uint32_t*>(Config::AddrCameraSmoothing2 + 4);
+        if (liveDisp >= 0x200 && liveDisp <= 0x250) {
+            Config::OffsetCameraSmoothing = liveDisp;
+        }
         memcpy(Config::OrigCameraSmoothing2, reinterpret_cast<void*>(Config::AddrCameraSmoothing2), 8);
-        std::cout << "camera: smoothing2 signature @ 0x" << std::hex << Config::AddrCameraSmoothing2 << std::dec << "\n";
+        std::cout << "camera: smoothing2 signature @ 0x" << std::hex << Config::AddrCameraSmoothing2 
+            << " (offset 0x" << Config::OffsetCameraSmoothing << ")" << std::dec << "\n";
     }
 
     Config::AddrCodecave = (uintptr_t)AllocateNearAddress(Config::AddrCameraHook, 0x1000);
@@ -503,64 +521,8 @@ void ApplyHooks() {
     int32_t jmpToCodecave = static_cast<int32_t>(fullJmp);
     memcpy(&Config::PatchCameraJmp[1], &jmpToCodecave, 4);
 
-    ToggleMod(); ToggleMod();
+    SetOnFootHooksEnabled(true);
 
     std::cout << "camera: hook live @ 0x" << std::hex << Config::AddrCameraHook
         << " -> codecave 0x" << Config::AddrCodecave << std::dec << "\n";
-}
-
-void KeyPollLoop() {
-    static bool last[256] = { false };
-    int configCheckCounter = 0;
-    while (Config::bInitialized.load()) {
-        if (++configCheckCounter >= 100) { // ~1s poll interval
-            configCheckCounter = 0;
-            if (HasConfigChanged()) {
-                LoadConfig();
-                RebuildCameraShellcode();
-            }
-        }
-
-        bool rebuild = false;
-        bool save = false;
-
-        auto HandleKey = [&](int key, std::atomic<float>& val, float mod) {
-            bool current = (GetAsyncKeyState(key) & 0x8000) != 0;
-            if (current) {
-                float n = val.load() + mod;
-                if (n > 50.0f) n = 50.0f;
-                if (n < -50.0f) n = -50.0f;
-                val.store(n);
-                rebuild = true;
-            }
-            else if (last[key]) {
-                save = true;
-            }
-            last[key] = current;
-            };
-
-        if (Config::EnableHotkeys.load()) {
-            bool toggle = (GetAsyncKeyState(Config::ToggleKey) & 0x8000) != 0;
-            if (toggle && !last[Config::ToggleKey]) ToggleMod();
-            last[Config::ToggleKey] = toggle;
-
-            if (Config::bModActive.load()) {
-                HandleKey(Config::IncDistKey, Config::CustomDist, Config::Step);
-                HandleKey(Config::DecDistKey, Config::CustomDist, -Config::Step);
-                HandleKey(Config::IncWidthKey, Config::CustomX, Config::Step);
-                HandleKey(Config::DecWidthKey, Config::CustomX, -Config::Step);
-                HandleKey(Config::IncHeightKey, Config::CustomHeight, Config::Step);
-                HandleKey(Config::DecHeightKey, Config::CustomHeight, -Config::Step);
-
-                if (rebuild) {
-                    RebuildCameraShellcode();
-                    if (g_transitionState.load(std::memory_order_acquire) == 0) {
-                        ForceUpdateCamera();
-                    }
-                }
-                if (save) SaveConfig();
-            }
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
 }

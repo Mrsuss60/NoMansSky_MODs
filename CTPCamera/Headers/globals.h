@@ -2,8 +2,25 @@
 #include <windows.h>
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 
 namespace Config {
+    // Spacewalking, underwater combat, and derelict freighter templates don't start with "CHAR"
+    inline bool IsOnFootTag(const char* tag) {
+        if (std::strncmp(tag, "CHAR", 4) == 0) return true;
+        if (std::strcmp(tag, "SPACECOMBAT") == 0) return true;
+        if (std::strcmp(tag, "WETCOMBAT") == 0) return true;
+        if (std::strcmp(tag, "FREIGHTCOMBAT") == 0) return true;
+        if (std::strcmp(tag, "ABANDFREIGHT") == 0) return true;
+        return false;
+    }
+
+    inline float BlendSmooth(float start, float target, float t) {
+        t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+        float eased = t * t * (3.0f - 2.0f * t);
+        return start + (target - start) * eased;
+    }
+
     inline std::atomic<float> CustomX = 22.54f;
     inline std::atomic<float> CustomHeight = -0.67f;
     inline std::atomic<float> CustomDist = 3.02f;
@@ -31,7 +48,7 @@ namespace Config {
     inline uint32_t OffsetDist = 0x498;
     inline uint32_t OffsetX = 0x4F4;
     inline uint32_t OffsetHeight = 0x4F8;
-    inline uint32_t OffsetCameraSmoothing = 0x21C;
+    inline uint32_t OffsetCameraSmoothing = 0x218;
     inline uint32_t OffsetSprintCameraS = 0x494;
     inline uint32_t OffsetCollision = 0x4A0;
 
@@ -39,7 +56,7 @@ namespace Config {
     inline const char* SigCameraShort = "F3 0F 11 8B 98 04 00 00";
     inline const char* SigCollisionRead1 = "F3 0F 59 83 A0 04 00 00";
     inline const char* SigCollisionRead2 = "F3 0F 59 93 A0 04 00 00";
-    inline const char* SigCameraSmoothing2 = "F3 0F 11 9E 1C 02 00 00";
+    inline const char* SigCameraSmoothing2 = "F3 0F 11 9E ?? 02 00 00";
 
     inline uint32_t OffsetCharacterRigTag = 0x478;
     inline int CorvetteExitTransitionSteps = 35;
@@ -63,6 +80,6 @@ namespace Config {
     inline unsigned char PatchXorpsXmm2[8] = { 0x0F, 0x57, 0xD2, 0x90, 0x90, 0x90, 0x90, 0x90 };
     inline unsigned char PatchCameraJmp[8] = { 0xE9, 0x00, 0x00, 0x00, 0x00, 0x90, 0x90, 0x90 };
 
-    inline unsigned char OrigCameraSmoothing2[8] = { 0xF3, 0x0F, 0x11, 0x9E, 0x1C, 0x02, 0x00, 0x00 };
+    inline unsigned char OrigCameraSmoothing2[8] = { 0xF3, 0x0F, 0x11, 0x9E, 0x18, 0x02, 0x00, 0x00 };
     inline unsigned char PatchNop8[8] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
 }

@@ -78,27 +78,6 @@ namespace CameraUI {
         }
     }
 
-    static void UpdateModPatches(bool bEnable) {
-        DWORD oP;
-        if (Config::AddrCameraHook) {
-            VirtualProtect((void*)Config::AddrCameraHook, 8, PAGE_EXECUTE_READWRITE, &oP);
-            memcpy((void*)Config::AddrCameraHook, bEnable ? Config::PatchCameraJmp : Config::OrigCamera, 8);
-            VirtualProtect((void*)Config::AddrCameraHook, 8, oP, &oP);
-        }
-        if (Config::AddrCollision1) {
-            VirtualProtect((void*)Config::AddrCollision1, 8, PAGE_EXECUTE_READWRITE, &oP);
-            memcpy((void*)Config::AddrCollision1, bEnable ? Config::PatchXorpsXmm0 : Config::OrigCollision1, 8);
-            VirtualProtect((void*)Config::AddrCollision1, 8, oP, &oP);
-        }
-        if (Config::AddrCollision2) {
-            VirtualProtect((void*)Config::AddrCollision2, 8, PAGE_EXECUTE_READWRITE, &oP);
-            memcpy((void*)Config::AddrCollision2, bEnable ? Config::PatchXorpsXmm2 : Config::OrigCollision2, 8);
-            VirtualProtect((void*)Config::AddrCollision2, 8, oP, &oP);
-        }
-
-        VehicleCamera::SetEnabled(bEnable);
-    }
-
     void RenderCustomCameraOptions(void* pUIContext) {
         if (!pUIContext) return;
 
@@ -120,9 +99,7 @@ namespace CameraUI {
             );
 
             if (newModActive != curModActive) {
-                std::cout << "ui: Master Mod Toggle changed -> " << (int)newModActive << "\n";
-                Config::bModActive.store(newModActive != 0);
-                UpdateModPatches(newModActive != 0);
+                SetModEnabled(newModActive != 0);
                 bChanged = true;
             }
 
@@ -436,7 +413,6 @@ namespace CameraUI {
         }
 
         if (bChanged) {
-            RebuildCameraShellcode();
             VehicleCamera::RebuildShellcode();
             SaveConfig();
         }
