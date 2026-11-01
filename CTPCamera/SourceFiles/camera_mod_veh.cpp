@@ -62,10 +62,24 @@ namespace {
     static void* s_pVehRelayStub = nullptr;
 
     static bool IsInsideHangarOrStation() {
-        if (!Config::AddrGameStateManager) return false;
+        if (!Config::AddrGameStateManager) {
+            static bool s_warnedMgr = false;
+            if (!s_warnedMgr) {
+                std::cout << "vehicle: WARNING - AddrGameStateManager is null, environment detector inactive\n";
+                s_warnedMgr = true;
+            }
+            return false;
+        }
         __try {
             uintptr_t pStateMgr = *Config::AddrGameStateManager;
-            if (!pStateMgr) return false;
+            if (!pStateMgr) {
+                static bool s_warnedPtr = false;
+                if (!s_warnedPtr) {
+                    std::cout << "vehicle: WARNING - *AddrGameStateManager is null (game state not ready)\n";
+                    s_warnedPtr = true;
+                }
+                return false;
+            }
             int envZone = *reinterpret_cast<int*>(pStateMgr + Config::OffsetEnvZone);
 
             // 2: Space Station, 14: Space Anomaly (Nexus), 15: Atlas Station
@@ -82,6 +96,13 @@ namespace {
             return false;
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {
+            static bool s_warnedEx = false;
+            if (!s_warnedEx) {
+                std::cout << "vehicle: WARNING - Exception reading environment state (offset 0x" 
+                          << std::hex << Config::OffsetEnvZone << ", freighter flag 0x" 
+                          << Config::OffsetFreighterHangar << ")\n" << std::dec;
+                s_warnedEx = true;
+            }
             return false;
         }
     }
@@ -104,15 +125,27 @@ namespace {
 
             if (memcmp(s_lastTag, currentTag, 16) != 0) {
                 float d0 = *(float*)(camera + Config::OffsetDist);
-                float d1 = *(float*)(camera + Config::OffsetDist + Config::StructStride);
-                float d2 = *(float*)(camera + Config::OffsetDist + 2 * Config::StructStride);
-
                 float h0 = *(float*)(camera + Config::OffsetHeight);
-                float h1 = *(float*)(camera + Config::OffsetHeight + Config::StructStride);
-                float h2 = *(float*)(camera + Config::OffsetHeight + 2 * Config::StructStride);
 
                 std::cout << "camera: template changed -> [" << (currentTag[0] ? currentTag : "NONE") << "]"
-                    << " | slot0: dist " << d0 << ", height " << h0 << "\n";
+                    << " | slot0: dist " << d0 << ", height(0x568)=" << h0;
+
+                if (memcmp(currentTag, "CORV", 4) == 0 && v200) {
+                    std::cout << " | v200+0x20=" << *(float*)((uintptr_t)v200 + 0x20)
+                              << " v200+0x7C=" << *(float*)((uintptr_t)v200 + 0x7C)
+                              << " v200+0x80=" << *(float*)((uintptr_t)v200 + 0x80);
+                }
+                std::cout << "\n";
+
+                if (memcmp(currentTag, "CORV", 4) == 0) {
+                    std::cout << "vehicle: CORVETTE struct dump @ camera=0x" << std::hex << camera << std::dec << "\n";
+                    for (uint32_t dbgOff = 0x500; dbgOff <= 0x5C0; dbgOff += 4) {
+                        float fval = *(float*)(camera + dbgOff);
+                        if (fval != 0.0f && std::isfinite(fval) && std::fabsf(fval) < 10000.0f) {
+                            std::cout << "  [+" << std::hex << dbgOff << std::dec << "] = " << fval << "\n";
+                        }
+                    }
+                }
 
                 memcpy(s_lastTag, currentTag, 17);
             }
@@ -176,6 +209,7 @@ namespace {
             else if (memcmp(currentTag, "CORV", 4) == 0) {
                 targetVehDist = Config::CustomCorvetteDist.load(std::memory_order_relaxed);
                 targetVehX = Config::CustomCorvetteX.load(std::memory_order_relaxed);
+
             }
             else if (memcmp(currentTag, "SPACESHIP", 9) == 0 || memcmp(currentTag, "DROP", 4) == 0 ||
                 memcmp(currentTag, "SCIE", 4) == 0 || memcmp(currentTag, "SHUT", 4) == 0 ||
@@ -184,6 +218,7 @@ namespace {
                 memcmp(currentTag, "ALIE", 4) == 0) {
                 targetVehDist = Config::CustomShipsDist.load(std::memory_order_relaxed);
                 targetVehX = Config::CustomShipsX.load(std::memory_order_relaxed);
+                targetVehHeight = Config::CustomShipsHeight.load(std::memory_order_relaxed);
             }
 
             if (isShipOrCorvette) {
@@ -195,8 +230,10 @@ namespace {
                 static const float s_transDurationSec = 0.85f;
                 static float s_transStartD = 0.0f;
                 static float s_transStartX = 0.0f;
+                static float s_transStartH = 0.0f;
                 static float s_transTargetD = 0.0f;
                 static float s_transTargetX = 0.0f;
+                static float s_transTargetH = 0.0f;
 
                 bool inHangar = IsInsideHangarOrStation();
 
@@ -215,6 +252,7 @@ namespace {
                     // Capture current visual camera values for a smooth start
                     s_transStartD = *(float*)(camera + Config::OffsetDist);
                     s_transStartX = *(float*)(camera + Config::OffsetX);
+                    s_transStartH = *(float*)(camera + Config::OffsetHeight);
 
                     if (inHangar) {
                         std::cout << "vehicle: entered station/hangar > vehicle camera override disabled\n";
@@ -225,6 +263,7 @@ namespace {
                         s_transState = TransState::ExitingHangar;
                         s_transTargetD = (targetVehDist > 0.0f) ? targetVehDist : s_transStartD;
                         s_transTargetX = (targetVehX != -999.0f) ? targetVehX : s_transStartX;
+                        s_transTargetH = (targetVehHeight != -999.0f) ? targetVehHeight : s_transStartH;
                     }
                 }
 
@@ -232,6 +271,7 @@ namespace {
                     // Blend towards live vanilla template from v200
                     float targetD = v200 ? *(float*)((uintptr_t)v200 + 0x20) : s_transStartD;
                     float targetX = v200 ? *(float*)((uintptr_t)v200 + 0x7C) : s_transStartX;
+                    float targetH = v200 ? *(float*)((uintptr_t)v200 + 0x80) : s_transStartH;
 
                     float elapsed = std::chrono::duration<float>(std::chrono::steady_clock::now() - s_transStartTime).count();
                     float t = elapsed / s_transDurationSec;
@@ -242,15 +282,18 @@ namespace {
 
                     float curD = Config::BlendSmooth(s_transStartD, targetD, t);
                     float curX = Config::BlendSmooth(s_transStartX, targetX, t);
+                    float curH = Config::BlendSmooth(s_transStartH, targetH, t);
 
                     if (v200) {
                         *(float*)((uintptr_t)v200 + 0x20) = curD;
                         *(float*)((uintptr_t)v200 + 0x7C) = curX;
+                        *(float*)((uintptr_t)v200 + 0x80) = curH;
                     }
                     for (int i = 0; i < 3; ++i) {
                         const uint32_t s = i * Config::StructStride;
                         *(float*)(camera + Config::OffsetDist + s) = curD;
                         *(float*)(camera + Config::OffsetX + s) = curX;
+                        *(float*)(camera + Config::OffsetHeight + s) = curH;
                     }
 
                     return result;
@@ -270,11 +313,15 @@ namespace {
 
                     float curD = Config::BlendSmooth(s_transStartD, s_transTargetD, t);
                     float curX = Config::BlendSmooth(s_transStartX, s_transTargetX, t);
+                    float curH = Config::BlendSmooth(s_transStartH, s_transTargetH, t);
 
                     if (v200) {
                         *(float*)((uintptr_t)v200 + 0x20) = curD;
                         if (targetVehX != -999.0f) {
                             *(float*)((uintptr_t)v200 + 0x7C) = curX;
+                        }
+                        if (targetVehHeight != -999.0f) {
+                            *(float*)((uintptr_t)v200 + 0x80) = curH;
                         }
                     }
                     for (int i = 0; i < 3; ++i) {
@@ -282,6 +329,9 @@ namespace {
                         *(float*)(camera + Config::OffsetDist + s) = curD;
                         if (targetVehX != -999.0f) {
                             *(float*)(camera + Config::OffsetX + s) = curX;
+                        }
+                        if (targetVehHeight != -999.0f) {
+                            *(float*)(camera + Config::OffsetHeight + s) = curH;
                         }
                     }
 
@@ -301,7 +351,7 @@ namespace {
             }
 
             if (targetVehHeight != -999.0f) {
-                if (v200 && memcmp(currentTag, "MECH", 4) == 0) {
+                if (v200) {
                     *(float*)((uintptr_t)v200 + 0x80) = targetVehHeight;
                 }
 
@@ -329,7 +379,7 @@ namespace {
         return result;
     }
 
-    CodeEmitter BuildMechAimCodecave(uintptr_t targetFuncAddr) {
+    CodeEmitter BuildMechAimCodecave(uintptr_t targetFuncAddr, uint32_t aimOffset) {
         CodeEmitter e;
 
         // Check for MECH tag
@@ -346,7 +396,10 @@ namespace {
         e.JmpExternal();
 
         e.Mark("is_mech");
-        e.Bytes({ 0xC7, 0x87, 0x58, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }); // mov dword ptr [rdi+458h], 0
+        // mov dword ptr [rdi + aimOffset], 0
+        e.Bytes({ 0xC7, 0x87 });
+        e.Imm32(aimOffset);
+        e.Imm32(0);
         e.Bytes({ 0xC7, 0x03, 0x00, 0x00, 0x00, 0x00 });                         // mov dword ptr [rbx], 0
         e.JmpExternal();
 
@@ -534,7 +587,11 @@ namespace VehicleCamera {
 
         // Mech aim / mining height lock
         uintptr_t aimPatternAddr = FindPattern("NMS.exe", Config::SigMechAimHook);
+        if (!aimPatternAddr) {
+            aimPatternAddr = FindPattern("NMS.exe", Config::SigMechAimHookLegacy);
+        }
         if (aimPatternAddr) {
+            uint32_t liveAimOff = *reinterpret_cast<uint32_t*>(aimPatternAddr + 3);
             uintptr_t hookSite = aimPatternAddr + 0x1F;
             Config::AddrMechAimHook = hookSite;
 
@@ -543,7 +600,7 @@ namespace VehicleCamera {
             int32_t callRelOffset = *(int32_t*)(hookSite + 1);
             uintptr_t targetFuncAddr = (hookSite + 5) + callRelOffset;
 
-            CodeEmitter aimEmitter = BuildMechAimCodecave(targetFuncAddr);
+            CodeEmitter aimEmitter = BuildMechAimCodecave(targetFuncAddr, liveAimOff);
             void* aimCave = AllocateNearAddress(hookSite, aimEmitter.buf.size());
             if (aimCave) {
                 PatchExternalJumps(aimEmitter, (uintptr_t)aimCave, hookSite + 9);
@@ -566,7 +623,8 @@ namespace VehicleCamera {
                 VirtualProtect((void*)hookSite, 9, oldProtect, &oldProtect);
                 FlushInstructionCache(GetCurrentProcess(), (void*)hookSite, 9);
 
-                std::cout << "vehicle: mech aim hook live @ 0x" << std::hex << hookSite << std::dec << "\n";
+                std::cout << "vehicle: mech aim hook live @ 0x" << std::hex << hookSite 
+                          << " (aim offset 0x" << liveAimOff << ")" << std::dec << "\n";
             }
         }
 
@@ -579,19 +637,44 @@ namespace VehicleCamera {
             int32_t disp = *reinterpret_cast<int32_t*>(envSig + 3);
             Config::AddrGameStateManager = reinterpret_cast<uintptr_t*>(envSig + 7 + disp);
             Config::OffsetEnvZone = *reinterpret_cast<uint32_t*>(envSig + 9);
+        }
 
-            // Dynamically verify freighter hangar flag and envzone offsets in GameStateManager
-            uintptr_t hangarSig = FindPattern("NMS.exe", Config::SigFreighterHangar);
-            if (hangarSig) {
-                Config::OffsetFreighterHangar = *reinterpret_cast<uint32_t*>(hangarSig + 2);
-                Config::OffsetEnvZone = *reinterpret_cast<uint32_t*>(hangarSig + 11);
+        // Dynamically verify freighter hangar flag and envzone offsets in GameStateManager
+        uintptr_t hangarSig = FindPattern("NMS.exe", Config::SigFreighterHangar);
+        if (hangarSig) {
+            uint32_t dynHangar = *reinterpret_cast<uint32_t*>(hangarSig + 2);
+            uint32_t dynEnvZone = *reinterpret_cast<uint32_t*>(hangarSig + 11);
+            if (dynHangar >= 0x10000 && dynHangar <= 0x2000000) {
+                Config::OffsetFreighterHangar = dynHangar;
+            }
+            if (dynEnvZone >= 0x10000 && dynEnvZone <= 0x2000000) {
+                Config::OffsetEnvZone = dynEnvZone;
             }
 
+            // Fallback: if envSig didn't find AddrGameStateManager, extract from mov rax, [rip+disp] at hangarSig - 31
+            if (!Config::AddrGameStateManager) {
+                const uint8_t* p = reinterpret_cast<const uint8_t*>(hangarSig - 31);
+                if (p[0] == 0x48 && p[1] == 0x8B && p[2] == 0x05) {
+                    int32_t dispMgr = *reinterpret_cast<const int32_t*>(p + 3);
+                    Config::AddrGameStateManager = reinterpret_cast<uintptr_t*>((uintptr_t)(p + 7) + dispMgr);
+                    std::cout << "vehicle: resolved AddrGameStateManager from hangar signature context\n";
+                }
+            }
+        }
+        else {
+            std::cout << "vehicle: WARNING - SigFreighterHangar not found, using fallback offset 0x"
+                      << std::hex << Config::OffsetFreighterHangar << std::dec << "\n";
+        }
+
+        if (Config::AddrGameStateManager && Config::OffsetEnvZone && Config::OffsetFreighterHangar) {
             std::cout << "vehicle: environment detector live @ 0x" << std::hex << (uintptr_t)Config::AddrGameStateManager
                 << " (offset 0x" << Config::OffsetEnvZone << ", freighter flag 0x" << Config::OffsetFreighterHangar << ")" << std::dec << "\n";
         }
         else {
-            std::cout << "vehicle: environment detector signature match failed!\n";
+            std::cout << "vehicle: ERROR - environment detector setup incomplete! AddrMgr=0x" 
+                      << std::hex << (uintptr_t)Config::AddrGameStateManager 
+                      << " EnvZone=0x" << Config::OffsetEnvZone 
+                      << " FreighterHangar=0x" << Config::OffsetFreighterHangar << std::dec << "\n";
         }
 
         Config::bVehicleHooksApplied.store(true);

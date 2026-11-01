@@ -252,6 +252,25 @@ namespace CameraUI {
                 bChanged = true;
             }
 
+            int curShipsHeightUI = ToVehicleSlider(Config::CustomShipsHeight.load(), -15.0f, 35.0f);
+            int newShipsHeightUI = fnAddIntSlider(
+                pUIContext,
+                "SHIPS Camera Height",
+                "Change The Third-Person Camera Height For All Starships",
+                curShipsHeightUI,
+                ToVehicleSlider(-0.8f, -15.0f, 35.0f),
+                1,
+                100,
+                &vehicleParams
+            );
+            if (newShipsHeightUI != curShipsHeightUI) {
+                float newShipsHeightVal = FromVehicleSlider(newShipsHeightUI, -15.0f, 35.0f);
+                std::cout << "ui: Ships Height changed -> UI: " << newShipsHeightUI
+                          << " (" << newShipsHeightVal << ")\n";
+                Config::CustomShipsHeight.store(newShipsHeightVal);
+                bChanged = true;
+            }
+
             int curCorvetteDistUI = ToVehicleSlider(Config::CustomCorvetteDist.load(), 28.0f, 350.0f, 1, 300);
             int newCorvetteDistUI = fnAddIntSlider(
                 pUIContext,

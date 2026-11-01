@@ -149,6 +149,7 @@ static bool HandleCameraHook(uintptr_t camera) {
             *(uint32_t*)(camera + 0x218) = 0;
             *(uint32_t*)(camera + 0x21C) = 0;
             *(uint32_t*)(camera + 0x220) = 0;
+            *(uint32_t*)(camera + 0x278) = 0;
 
             for (int i = 0; i < Config::CopiesSmoothing; ++i) {
                 const uint32_t s = i * Config::StructStride;
@@ -195,6 +196,7 @@ void ForceUpdateCamera() {
             else if (memcmp(currentTag, "CORV", 4) == 0) {
                 targetVehDist = Config::CustomCorvetteDist.load();
                 targetVehX = Config::CustomCorvetteX.load();
+
             }
             else if (memcmp(currentTag, "SPACESHIP", 9) == 0 || memcmp(currentTag, "DROP", 4) == 0 ||
                 memcmp(currentTag, "SCIE", 4) == 0 || memcmp(currentTag, "SHUT", 4) == 0 ||
@@ -203,6 +205,7 @@ void ForceUpdateCamera() {
                 memcmp(currentTag, "ALIE", 4) == 0) {
                 targetVehDist = Config::CustomShipsDist.load();
                 targetVehX = Config::CustomShipsX.load();
+                targetVehHeight = Config::CustomShipsHeight.load();
             }
 
             if (targetVehDist > 0.0f) {
@@ -246,6 +249,7 @@ void ForceUpdateCamera() {
             *(uint32_t*)(Config::GlobalCameraPtr + 0x218) = 0;
             *(uint32_t*)(Config::GlobalCameraPtr + 0x21C) = 0;
             *(uint32_t*)(Config::GlobalCameraPtr + 0x220) = 0;
+            *(uint32_t*)(Config::GlobalCameraPtr + 0x278) = 0;
 
             for (int i = 0; i < Config::CopiesSmoothing; ++i) {
                 uint32_t s = i * Config::StructStride;
@@ -419,7 +423,7 @@ void ApplyHooks() {
 
     uintptr_t hookAddr = 0;
 
-    // movss [rbx+498h], xmm1
+    // movss [rbx+508h], xmm1 (or fallback)
     hookAddr = FindPattern("NMS.exe", Config::SigCamera);
     if (hookAddr) {
         std::cout << "camera: signature match @ 0x" << std::hex << hookAddr << std::dec << "\n";
@@ -430,6 +434,14 @@ void ApplyHooks() {
         hookAddr = FindPattern("NMS.exe", Config::SigCameraShort);
         if (hookAddr) {
             std::cout << "camera: signature match @ 0x" << std::hex << hookAddr << std::dec << "\n";
+        }
+    }
+
+    // Legacy fallback (pre-7.11)
+    if (!hookAddr) {
+        hookAddr = FindPattern("NMS.exe", Config::SigCameraLegacy);
+        if (hookAddr) {
+            std::cout << "camera: legacy signature match @ 0x" << std::hex << hookAddr << std::dec << "\n";
         }
     }
 
@@ -447,27 +459,30 @@ void ApplyHooks() {
         return;
     }
 
-    // Read displacement from instruction
+    // Read displacement dynamically from instruction
     int32_t liveOffset = *reinterpret_cast<int32_t*>(hookAddr + 4);
-    if (liveOffset == 0x498 || (liveOffset >= 0x480 && liveOffset <= 0x4C0)) {
+    if (liveOffset >= 0x480 && liveOffset <= 0x600) {
         Config::OffsetDist = static_cast<uint32_t>(liveOffset);
         Config::OffsetCollision = Config::OffsetDist + 0x08;
         Config::OffsetX = Config::OffsetDist + 0x5C;
         Config::OffsetHeight = Config::OffsetDist + 0x60;
-        Config::OffsetCharacterRigTag = 0x478;
-        std::cout << "camera: offsets -> distance 0x" << std::hex << Config::OffsetDist
+        Config::OffsetCharacterRigTag = Config::OffsetDist - 0x20;
+        Config::OffsetSprintCameraS = Config::OffsetDist - 0x04;
+        std::cout << "camera: offsets dynamically resolved -> distance 0x" << std::hex << Config::OffsetDist
             << ", collision 0x" << Config::OffsetCollision
             << ", x 0x" << Config::OffsetX
             << ", height 0x" << Config::OffsetHeight
-            << ", tag 0x" << Config::OffsetCharacterRigTag << std::dec << "\n";
+            << ", tag 0x" << Config::OffsetCharacterRigTag 
+            << ", sprint 0x" << Config::OffsetSprintCameraS << std::dec << "\n";
     }
     else {
-        Config::OffsetDist = 0x498;
-        Config::OffsetCollision = 0x4A0;
-        Config::OffsetX = 0x4F4;
-        Config::OffsetHeight = 0x4F8;
-        Config::OffsetCharacterRigTag = 0x478;
-        std::cout << "camera: offsets -> distance 0x498, collision 0x4a0, x 0x4f4, height 0x4f8, tag 0x478\n";
+        Config::OffsetDist = 0x508;
+        Config::OffsetCollision = 0x510;
+        Config::OffsetX = 0x564;
+        Config::OffsetHeight = 0x568;
+        Config::OffsetCharacterRigTag = 0x4E8;
+        Config::OffsetSprintCameraS = 0x504;
+        std::cout << "camera: offsets fallback -> distance 0x508, collision 0x510, x 0x564, height 0x568, tag 0x4e8\n";
     }
 
     DWORD64 imageBase = 0;
@@ -490,14 +505,16 @@ void ApplyHooks() {
     }
 
     if (Config::AddrCollision1) {
+        memcpy(Config::OrigCollision1, reinterpret_cast<void*>(Config::AddrCollision1), 8);
         std::cout << "camera: collision read1 @ 0x" << std::hex << Config::AddrCollision1 << std::dec << "\n";
     }
     if (Config::AddrCollision2) {
+        memcpy(Config::OrigCollision2, reinterpret_cast<void*>(Config::AddrCollision2), 8);
         std::cout << "camera: collision read2 @ 0x" << std::hex << Config::AddrCollision2 << std::dec << "\n";
     }
     if (Config::AddrCameraSmoothing2) {
         uint32_t liveDisp = *reinterpret_cast<uint32_t*>(Config::AddrCameraSmoothing2 + 4);
-        if (liveDisp >= 0x200 && liveDisp <= 0x250) {
+        if (liveDisp >= 0x200 && liveDisp <= 0x2F0) {
             Config::OffsetCameraSmoothing = liveDisp;
         }
         memcpy(Config::OrigCameraSmoothing2, reinterpret_cast<void*>(Config::AddrCameraSmoothing2), 8);
