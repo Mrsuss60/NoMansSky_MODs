@@ -129,7 +129,7 @@ void ToggleHUDState() {
     if (appBase) {
         uint8_t* pWorking = reinterpret_cast<uint8_t*>(appBase + Config::OffsetWorkingHUD);
         uint8_t* pSaved   = reinterpret_cast<uint8_t*>(appBase + Config::OffsetSavedHUD);
-        uint8_t settingVal = shouldHide ? 0 : 1;
+        uint8_t settingVal = Config::bHUDHiddenMode ? (shouldHide ? 1 : 0) : (shouldHide ? 0 : 1);
         if (IsMemoryReadable(pWorking, sizeof(uint8_t))) *pWorking = settingVal;
         if (IsMemoryReadable(pSaved, sizeof(uint8_t)))   *pSaved   = settingVal;
     }
@@ -152,6 +152,14 @@ static bool ApplyHooks() {
         LOG << "hud: global app wrapper signature not found\n";
     }
 
+    if (ResolveHUDSettingsOffsets(Config::OffsetWorkingHUD, Config::OffsetSavedHUD, Config::bHUDHiddenMode)) {
+        LOG << "hud: settings offsets dynamically resolved (Working: 0x" << std::hex << Config::OffsetWorkingHUD
+            << ", Saved: 0x" << Config::OffsetSavedHUD << ", Mode: " << (Config::bHUDHiddenMode ? "HUDHidden" : "ShowHUD") << std::dec << ")\n";
+    } else {
+        LOG << "hud: using fallback settings offsets (Working: 0x" << std::hex << Config::OffsetWorkingHUD
+            << ", Saved: 0x" << Config::OffsetSavedHUD << std::dec << ")\n";
+    }
+
     uintptr_t nmsBase = (uintptr_t)GetModuleHandleA(nullptr);
 
     uintptr_t addrPlayerHUD = ResolveHUDCallbackByString("NMS.exe", "Game/HUD/PlayerHUD");
@@ -167,16 +175,25 @@ static bool ApplyHooks() {
     }
 
     if (!addrPlayerHUD && sigWrapper) {
-        uint8_t* pRel = reinterpret_cast<uint8_t*>(sigWrapper + 0x37A10);
-        if (IsMemoryReadable(pRel, 3) && *pRel == 0xE9) {
-            addrPlayerHUD = reinterpret_cast<uintptr_t>(pRel);
+        uint8_t* pRel71 = reinterpret_cast<uint8_t*>(sigWrapper + 0x37D70);
+        if (IsMemoryReadable(pRel71, 3) && *pRel71 == 0xE9) {
+            addrPlayerHUD = reinterpret_cast<uintptr_t>(pRel71);
+        } else {
+            uint8_t* pRel70 = reinterpret_cast<uint8_t*>(sigWrapper + 0x37A10);
+            if (IsMemoryReadable(pRel70, 3) && *pRel70 == 0xE9) {
+                addrPlayerHUD = reinterpret_cast<uintptr_t>(pRel70);
+            }
         }
     }
 
     if (!addrPlayerHUD && nmsBase) {
-        addrPlayerHUD = nmsBase + 0x9A57D0;
-        if (!IsMemoryReadable(reinterpret_cast<void*>(addrPlayerHUD), 3) || *reinterpret_cast<uint8_t*>(addrPlayerHUD) != 0xE9) {
-            addrPlayerHUD = nmsBase + 0x9A5950;
+        const uintptr_t rvas[] = { 0x9BFDF0, 0x9A57D0, 0x9A5950 };
+        for (uintptr_t rva : rvas) {
+            uintptr_t cand = nmsBase + rva;
+            if (IsMemoryReadable(reinterpret_cast<void*>(cand), 3) && *reinterpret_cast<uint8_t*>(cand) == 0xE9) {
+                addrPlayerHUD = cand;
+                break;
+            }
         }
     }
 
@@ -201,16 +218,27 @@ static bool ApplyHooks() {
     }
 
     if (!addrShipHUD && sigWrapper) {
-        uint8_t* pRel = reinterpret_cast<uint8_t*>(sigWrapper + 0x659C0);
-        if (IsMemoryReadable(pRel, 3) && pRel[0] == 0x40 && pRel[1] == 0x53) {
-            addrShipHUD = reinterpret_cast<uintptr_t>(pRel);
+        uint8_t* pRel71 = reinterpret_cast<uint8_t*>(sigWrapper + 0x69540);
+        if (IsMemoryReadable(pRel71, 3) && pRel71[0] == 0x40 && pRel71[1] == 0x53) {
+            addrShipHUD = reinterpret_cast<uintptr_t>(pRel71);
+        } else {
+            uint8_t* pRel70 = reinterpret_cast<uint8_t*>(sigWrapper + 0x659C0);
+            if (IsMemoryReadable(pRel70, 3) && pRel70[0] == 0x40 && pRel70[1] == 0x53) {
+                addrShipHUD = reinterpret_cast<uintptr_t>(pRel70);
+            }
         }
     }
 
     if (!addrShipHUD && nmsBase) {
-        addrShipHUD = nmsBase + 0x9D3780;
-        if (!IsMemoryReadable(reinterpret_cast<void*>(addrShipHUD), 3) || *reinterpret_cast<uint8_t*>(addrShipHUD) != 0x40) {
-            addrShipHUD = nmsBase + 0x9D3900;
+        const uintptr_t rvas[] = { 0x9F15C0, 0x9D3780, 0x9D3900 };
+        for (uintptr_t rva : rvas) {
+            uintptr_t cand = nmsBase + rva;
+            if (IsMemoryReadable(reinterpret_cast<void*>(cand), 3) &&
+                reinterpret_cast<uint8_t*>(cand)[0] == 0x40 &&
+                reinterpret_cast<uint8_t*>(cand)[1] == 0x53) {
+                addrShipHUD = cand;
+                break;
+            }
         }
     }
 

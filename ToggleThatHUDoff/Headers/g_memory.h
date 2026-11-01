@@ -14,3 +14,4 @@ uintptr_t FindRipRefInRange(uintptr_t targetAddr, uintptr_t rangeStart, uintptr_
 uintptr_t ResolveCallTarget(uintptr_t callInstructionAddr);
 uintptr_t FindNthCallForward(uintptr_t startAddr, size_t maxScanBytes, size_t targetCallIndex);
 uintptr_t ResolveHUDCallbackByString(const char* moduleName, const char* hudName);
+bool ResolveHUDSettingsOffsets(uint32_t& outWorkingOffset, uint32_t& outSavedOffset, bool& outHUDHiddenMode);

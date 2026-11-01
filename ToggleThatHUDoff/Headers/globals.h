@@ -21,11 +21,16 @@ namespace Config {
     // PlayerHUD Indicator Panel Pattern (function immediately following PlayerHUD callback thunk)
     inline const char* SigPlayerHUDIndicator = "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 41 55 41 56 41 57 48 83 EC 30 8B 69 6C";
 
+    // In 7.11+: HUDHidden (1 = hidden, 0 = visible)
+    // In 7.03:  ShowHUD   (0 = hidden, 1 = visible)
+    inline bool bHUDHiddenMode = true;
+
     // Memory Offsets from (*pGlobalAppPtr)
-    // Working settings struct = 3205328 (0x30E8D0) + 28000 (0x6D60) = 3233328 (0x315630)
-    inline uint32_t OffsetWorkingHUD = 0x315630;
-    // Saved settings struct = 3177296 (0x307B50) + 28000 (0x6D60) = 3205296 (0x30E8B0)
-    inline uint32_t OffsetSavedHUD   = 0x30E8B0;
+    // 7.11 defaults:
+    // Working settings struct = 3205528 (0x30E998) + 28008 (0x6D68) = 3233536 (0x315700)
+    inline uint32_t OffsetWorkingHUD = 0x315700;
+    // Saved settings struct = 3177480 (0x307C08) + 28008 (0x6D68) = 3205488 (0x30E970)
+    inline uint32_t OffsetSavedHUD   = 0x30E970;
 }
 
 void ToggleHUDState();

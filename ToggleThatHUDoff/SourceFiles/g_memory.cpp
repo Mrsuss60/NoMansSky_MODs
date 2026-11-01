@@ -43,7 +43,7 @@ void* AllocateNearAddress(uintptr_t target, size_t size) {
     for (uint64_t a = start; a > minA; a -= pSize) {
         if (void* alloc = VirtualAlloc((void*)a, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE)) return alloc;
     }
-    for (uint64_t a = start; a < maxA; a += pSize) {
+    for (uint64_t a = start; a < maxA; a -= pSize) {
         if (void* alloc = VirtualAlloc((void*)a, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE)) return alloc;
     }
     return nullptr;
@@ -150,11 +150,13 @@ uintptr_t ResolveHUDCallbackByString(const char* moduleName, const char* hudName
     DWORD imgSize = ntH->OptionalHeader.SizeOfImage;
     uint8_t* scan = (uint8_t*)hMod;
 
+    // Search for lea r8, [rip+disp] referencing hudName
     for (DWORD i = 35; i < imgSize - 35; ++i) {
         if (scan[i] == 0x4C && scan[i + 1] == 0x8D && (scan[i + 2] & 0xC7) == 0x05) {
             int32_t disp = *reinterpret_cast<int32_t*>(&scan[i + 3]);
             uintptr_t ripAfter = (uintptr_t)&scan[i + 7];
             if ((ripAfter + disp) == pStr) {
+                // Search bidirectionally [-35 bytes, +35 bytes] around lea r8 for lea r9
                 DWORD startSearch = (i >= 35) ? (i - 35) : 0;
                 DWORD endSearch = (i + 35 < imgSize - 7) ? (i + 35) : (imgSize - 7);
 
@@ -173,3 +175,61 @@ uintptr_t ResolveHUDCallbackByString(const char* moduleName, const char* hudName
     return 0;
 }
 
+bool ResolveHUDSettingsOffsets(uint32_t& outWorkingOffset, uint32_t& outSavedOffset, bool& outHUDHiddenMode) {
+    uintptr_t pStr = FindString("NMS.exe", "OPTION_HUD");
+    if (!pStr) return false;
+
+    HMODULE hMod = GetModuleHandleA("NMS.exe");
+    if (!hMod) hMod = GetModuleHandleA(nullptr);
+    if (!hMod) return false;
+
+    PIMAGE_DOS_HEADER dH = (PIMAGE_DOS_HEADER)hMod;
+    PIMAGE_NT_HEADERS ntH = (PIMAGE_NT_HEADERS)((uint8_t*)hMod + dH->e_lfanew);
+    DWORD imgSize = ntH->OptionalHeader.SizeOfImage;
+    uint8_t* scan = (uint8_t*)hMod;
+
+    for (DWORD i = 0; i < imgSize - 7; ++i) {
+        if ((scan[i] == 0x48 || scan[i] == 0x4C) && scan[i + 1] == 0x8D && (scan[i + 2] & 0xC7) == 0x05) {
+            int32_t disp = *reinterpret_cast<int32_t*>(&scan[i + 3]);
+            uintptr_t ripAfter = (uintptr_t)&scan[i + 7];
+            if ((ripAfter + disp) == pStr) {
+                uint32_t hudField = 0;
+                bool isHUDHidden = false;
+                DWORD startBack = (i >= 300) ? (i - 300) : 0;
+                for (DWORD j = i; j > startBack; --j) {
+                    uint32_t val = *reinterpret_cast<uint32_t*>(&scan[j]);
+                    if (val >= 0x6D50 && val <= 0x6D80) {
+                        hudField = val;
+                        isHUDHidden = (val == 0x6D68);
+                        break;
+                    }
+                }
+
+                if (!hudField) continue;
+
+                uint32_t workingStruct = 0;
+                DWORD startStruct = (i >= 2048) ? (i - 2048) : 0;
+                for (DWORD k = i; k > startStruct; --k) {
+                    if (scan[k] == 0x48 && scan[k + 1] == 0x81 && (scan[k + 2] & 0xF8) == 0xC0) {
+                        uint32_t imm = *reinterpret_cast<uint32_t*>(&scan[k + 3]);
+                        if (imm >= 0x300000 && imm <= 0x350000) {
+                            workingStruct = imm;
+                            break;
+                        }
+                    }
+                }
+
+                if (!workingStruct) continue;
+
+                uint32_t structDiff = isHUDHidden ? 0x6D90 : 0x6D80;
+                uint32_t savedStruct = workingStruct - structDiff;
+
+                outWorkingOffset = workingStruct + hudField;
+                outSavedOffset   = savedStruct + hudField;
+                outHUDHiddenMode = isHUDHidden;
+                return true;
+            }
+        }
+    }
+    return false;
+}
